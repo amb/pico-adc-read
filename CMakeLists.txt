@@ -12,6 +12,7 @@ add_executable(pico_adc_read
 
 target_link_libraries(pico_adc_read
     pico_stdlib
+    hardware_adc
     hardware_pwm
 )
 
