@@ -26,6 +26,8 @@
 #include <cstring>
 
 #include "nam_fx.h"
+#include "reverb.h"
+#include "noise_gate.h"
 
 //----------------------------------------------------------------------------
 // Hardware pins
@@ -46,9 +48,9 @@
 #define PWM_MID          (PWM_WRAP / 2)
 
 #define ADC_BIAS          2048
-#define INPUT_GAIN        0.02f   // scale ADC float before NAM (adjust to taste)
+#define INPUT_GAIN        0.01f   // scale ADC float before NAM (adjust to taste)
 #define TONE_FREQ_HZ      440
-#define TONE_AMPLITUDE    250     // raw PWM units
+#define TONE_AMPLITUDE    30      // raw PWM units (was 250 — way too loud)
 
 // Output ring buffer (NAM mode only)
 #define RING_SIZE         192
@@ -231,6 +233,11 @@ int main(void) {
     nam_fx_init();
     printf("NAM engine: %s\n", nam_fx_name());
 
+    schroeder_init();
+    schroeder_set_mix(0.35f);
+
+    dc_blocker_init();
+
     sleep_ms(1500);
     add_repeating_timer_us(-21, audio_timer_callback, nullptr, &audio_timer);
 
@@ -282,8 +289,12 @@ int main(void) {
             adc_in_ready = -1;
 
             if ((RING_SIZE - (ring_w - ring_r)) >= NFRAMES) {
+                // adc_in_buf already holds float values (converted in ISR)
+                dc_blocker_process(adc_in_buf[buf_idx], NFRAMES);
+
                 float out_float[NFRAMES];
                 nam_fx_process(out_float, adc_in_buf[buf_idx], NFRAMES);
+                schroeder_process(out_float, NFRAMES);
                 ring_push(out_float);
             }
         }

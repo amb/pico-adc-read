@@ -43,6 +43,8 @@ set(NAM_ENGINE_OPT -Wl,--whole-archive nam_engine -Wl,--no-whole-archive)
 add_executable(pico_adc_read
     src/main.cpp
     src/nam_fx.cpp
+    src/reverb.cpp
+    src/noise_gate.cpp
     ${NAM_MODEL_SOURCE}
 )
 target_include_directories(pico_adc_read PRIVATE include src)
