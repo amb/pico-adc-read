@@ -26,7 +26,7 @@
 #endif
 #define NCH 3
 #ifndef NAM_OUTPUT_GAIN
-#define NAM_OUTPUT_GAIN 1.0f   // ~unity vs passthrough (model already has makeup gain)
+#define NAM_OUTPUT_GAIN 0.5f   // reduced from 1.0 — less output clipping
 #endif
 #define SENTINEL 0xFFFFFFFFu
 

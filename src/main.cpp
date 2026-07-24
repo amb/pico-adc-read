@@ -46,6 +46,7 @@
 #define PWM_MID          (PWM_WRAP / 2)
 
 #define ADC_BIAS          2048
+#define INPUT_GAIN        0.02f   // scale ADC float before NAM (adjust to taste)
 #define TONE_FREQ_HZ      440
 #define TONE_AMPLITUDE    250     // raw PWM units
 
@@ -95,12 +96,13 @@ static          int  adc_in_pos = 0;      // position within that buffer
 //----------------------------------------------------------------------------
 
 static inline float adc_to_float(uint16_t raw) {
-    return ((float)((int32_t)raw - ADC_BIAS)) * (1.0f / 2048.0f);
+    return ((float)((int32_t)raw - ADC_BIAS)) * (1.0f / 2048.0f) * INPUT_GAIN;
 }
 
 static inline uint16_t float_to_pwm(float x) {
-    if (x > 1.0f)  x = 1.0f;
-    if (x < -1.0f) x = -1.0f;
+    // soft-clip with some headroom — reduces harsh digital clipping
+    if (x > 0.95f)  x = 0.95f;
+    if (x < -0.95f) x = -0.95f;
     return (uint16_t)(PWM_MID + (int32_t)(x * (float)PWM_MID));
 }
 
