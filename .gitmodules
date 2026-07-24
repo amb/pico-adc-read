@@ -1,0 +1,3 @@
+[submodule "lib/NeuralAmpModelerCore"]
+	path = lib/NeuralAmpModelerCore
+	url = https://github.com/oyama/NeuralAmpModelerCore.git

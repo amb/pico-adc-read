@@ -1,0 +1,23 @@
+// Bare-metal no-op <mutex> shadow — the pico toolchain's newlib has no threading,
+// so we provide empty stubs for the NAM engine's slim-container lock guards.
+#pragma once
+
+#include <exception>
+#if __has_include(<pico/mutex.h>)
+#include <pico/mutex.h>   // pico-sdk has its own mutex type
+#endif
+
+namespace std {
+
+struct mutex {
+    void lock() {}
+    void unlock() {}
+    bool try_lock() { return true; }
+};
+
+template <typename M>
+struct lock_guard {
+    explicit lock_guard(M&) {}
+};
+
+} // namespace std

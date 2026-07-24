@@ -3,3 +3,4 @@ python/.venv/
 python/__pycache__/
 *.pyc
 .DS_Store
+# lib/ is a git submodule — tracked by git
