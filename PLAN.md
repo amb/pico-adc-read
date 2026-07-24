@@ -6,6 +6,75 @@ running on the Pico 2 (RP2350), based on
 
 ADC on GP26 → dual-core NAM → PWM on GP19 at 200 kHz carrier.  No USB audio.
 
+## What is NAM v2 (A2)?
+
+**Neural Amp Modeler Architecture 2 (A2)** is the next generation of open-source amp
+modeling, built by [TONE3000](https://tone3000.com) in partnership with NAM creator
+Steve Atkinson.  It's the most accurate amp modeling technology ever built, and its
+smaller A2-Lite variant is efficient enough to run on a **$3 ARM Cortex-M7 chip**.
+
+A2 is a WaveNet-derived feedforward neural network.  A single ".nam" download contains
+two "slim points" of the same model:
+
+| Variant | Channels | Use case | Runs on RP2350? |
+|---------|----------|----------|-----------------|
+| **A2-Full** | 8 | Studio/DAW — maximum accuracy | ❌ No |
+| **A2-Lite** | 3 | Embedded/pedals — still beats all commercial modelers | ✅ Yes |
+
+A2-Lite is what makes this project possible.  On a Daisy Seed (Cortex-M7 @ 480 MHz)
+it clears real time easily; on the RP2350's dual Cortex-M33 @ 300 MHz, oyama's
+optimized dual-core pipeline runs it at 73% CPU (4,533 cycles/sample at 48 kHz).
+
+A2 is **fully open-source** (MIT license).  NAM v1 ("A1") still works but is
+deprecated — all new captures on TONE3000 are A2.
+
+## Where the amp simulations come from: TONE3000.com
+
+[TONE3000](https://tone3000.com) (formerly ToneHunt) is the community platform for
+NAM captures and impulse responses.  Thousands of creators upload hyper-realistic
+neural models of amplifiers, pedals, outboard gear, and full signal chains.
+
+How it works:
+1. A creator captures their real amp/pedal/rig using the NAM training pipeline
+   (sweep signals → neural network training → .nam model file)
+2. The .nam file is uploaded to TONE3000 with metadata (amp model, settings, cab,
+   mics, description, tags)
+3. Anyone can browse and download these captures for free
+4. The .nam file can be loaded into the NAM plugin (DAW), compatible hardware
+   pedals, or — in our case — compiled into firmware for a standalone pedal
+
+**Licensing**: Most captures use the T3K license — free for personal use, but the
+.nam file itself cannot be redistributed.  This means our firmware repository can
+include the weights (as a compiled-in array) but users should download their own
+.nam files from TONE3000 for different tones.  See [TONE3000's policy](https://www.tone3000.com/legal/tone-sharing-policy).
+
+## Default model: 1964 Marshall JTM-45 Block Logo Radiospares OT
+
+**URL**: https://www.tone3000.com/tones/1964-marshall-jtm-45-block-logo-radiospares-ot-crunch-a2-76417
+
+**Creator**: [amalgamaudio](https://www.amalgamcaptures.com) (professional capture artist)
+
+| Property | Value |
+|----------|-------|
+| Amp | 1964 Marshall JTM-45 Block Logo with Radiospares Output Transformer |
+| Cab | 1966 Marshall 4×12 Straight Pinstripe, Celestion G12 Alnico (vintage) |
+| Mics | Royer R121, Beyerdynamic M160, Neumann U87 |
+| Style | Old-school blues, early rock (Clapton, Hendrix, Townshend) |
+| Settings | Presence 4, Bass 0, Middle 6, Treble 7, Vol I 7, Vol II 0 |
+| A2-Full ESR | 0.0042 (excellent) |
+| A2-Lite ESR | 0.0106 (still very good) |
+| Downloads | 5,852 |
+| License | T3K |
+
+> "The holy grail Marshall JTM-45 amp bar none — an early 1964 Block Logo with the
+> Radiospares Output Transformer.  It has a singing sustain, musical compression and
+> a bold smoothness that none of the later Drake OT equipped amps can match."
+> — amalgamaudio
+
+This is an ideal default: a celebrated vintage amp with a crunch character that
+covers blues, classic rock, and edge-of-breakup tones.  At A2-Lite size it's ~1,871
+float weights (~7.5 KB), easily fitting the RP2350's flash.
+
 ## Source of truth
 
 oyama's repo runs a production NAM A2-Lite tone (3-channel WaveNet, 23 dilated-conv
@@ -99,28 +168,28 @@ GP19 ←── PWM ←── timer ←── out_buf[48] ←─── NAM    │
 7. **Embed model** — nam2c host tool builds from `tone.nam`, see [model embedding](#how-the-model-gets-embedded-nam2c-pipeline) above.
 8. **Benchmark** — verify cycle budget at 300 MHz.
 
-## Where to get the amp simulation file
+## Where to get amp simulation files
 
-**Download from [tone3000.com](https://tone3000.com/).**  TONE3000 is Steve Atkinson's
-site for NAM v2 (A2 architecture) captures.  Pick any A2 capture and download the
-`.nam` file.
+**Download any A2 capture from [tone3000.com/search](https://tone3000.com/search).**
+Filter by "A2" under Technical to see only A2-compatible captures.
 
 ### What's inside a .nam file
 
-A `.nam` file is a JSON container (technically a "SlimmableContainer") that packs
-two sub-models of the same amp at different sizes:
+A `.nam` file is a JSON container (a "SlimmableContainer") that packs two
+sub-models of the same amp at different channel widths:
 
 | Sub-model | Channels | Weights | Fits RP2350? |
 |-----------|----------|---------|--------------|
 | **A2-Lite** | 3 | ~1,871 (~7.5 KB) | ✅ Yes — real time at 300 MHz |
 | **A2-Full** | 8 | ~5,000 (~20 KB) | ❌ No — too large for real time |
 
-Only A2-Lite runs in real time.  A2-Full and the older WaveNet v1 ("standard NAM")
-are rejected at build time with a clear error.
+Only A2-Lite runs in real time on the RP2350.  A2-Full and the older WaveNet v1
+("standard NAM") models are rejected at build time by `is_a2_shape()` with a clear
+error — no silent fallback to a wrong or slow model.
 
 **Naming note**: The NAM engine source calls A2-Lite "nano" and A2-Full "standard"
-(this predates TONE3000's A2-Lite / A2-Full naming).  In the code you'll see
-`is_a2_shape` and `a2_fast` referring to A2-Lite (the 3-channel nano shape).
+(this predates TONE3000's naming).  In the code you'll see `is_a2_shape` and
+`a2_fast` referring to A2-Lite (the 3-channel nano shape).
 
 ## How the model gets embedded (nam2c pipeline)
 
@@ -157,13 +226,18 @@ parsing** — the model is a static const array in flash.
 To use a different amp capture:
 
 ```bash
-# Download any A2 capture from tone3000.com
-cp "My Sick 5150.nam" tone.nam
+# Download any A2 capture from tone3000.com (e.g., browse tone3000.com/search)
+# The default model (already in the repo) is:
+#   1964 Marshall JTM-45 Block Logo Radiospares OT - CRUNCH
 
-# Edit CMakeLists.txt: change nam_set_model(example.nam) to nam_set_model(tone.nam)
-# Or pass it on the cmake command line:
+# Place your .nam file in the project root:
+cp ~/Downloads/"My Sick 5150.nam" ./tone.nam
+
+# Point the build at it — either by editing CMakeLists.txt:
+#   nam_set_model(tone.nam)
+# or on the command line:
 cmake -S . -B build -DNAM_MODEL=tone.nam -DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target pico_nam_pwm -j
+cmake --build build -j
 ```
 
 `nam2c` validates the model at build time.  If you accidentally use an A2-Full
