@@ -96,8 +96,85 @@ GP19 ←── PWM ←── timer ←── out_buf[48] ←─── NAM    │
 4. **Add PWM+timer output** — ring buffer consumed at 48 kHz.
 5. **Wire dual-core** — core1 launch, SIO FIFO handoff, 1 ms block tick.
 6. **BOOTSEL toggle** + LED — NAM vs clean passthrough.
-7. **Embed model** — nam2c toolchain, example tone.
+7. **Embed model** — nam2c host tool builds from `tone.nam`, see [model embedding](#how-the-model-gets-embedded-nam2c-pipeline) above.
 8. **Benchmark** — verify cycle budget at 300 MHz.
+
+## Where to get the amp simulation file
+
+**Download from [tone3000.com](https://tone3000.com/).**  TONE3000 is Steve Atkinson's
+site for NAM v2 (A2 architecture) captures.  Pick any A2 capture and download the
+`.nam` file.
+
+### What's inside a .nam file
+
+A `.nam` file is a JSON container (technically a "SlimmableContainer") that packs
+two sub-models of the same amp at different sizes:
+
+| Sub-model | Channels | Weights | Fits RP2350? |
+|-----------|----------|---------|--------------|
+| **A2-Lite** | 3 | ~1,871 (~7.5 KB) | ✅ Yes — real time at 300 MHz |
+| **A2-Full** | 8 | ~5,000 (~20 KB) | ❌ No — too large for real time |
+
+Only A2-Lite runs in real time.  A2-Full and the older WaveNet v1 ("standard NAM")
+are rejected at build time with a clear error.
+
+**Naming note**: The NAM engine source calls A2-Lite "nano" and A2-Full "standard"
+(this predates TONE3000's A2-Lite / A2-Full naming).  In the code you'll see
+`is_a2_shape` and `a2_fast` referring to A2-Lite (the 3-channel nano shape).
+
+## How the model gets embedded (nam2c pipeline)
+
+oyama's `tools/nam2c.cpp` is a **host-side C++ tool** (compiled with the system
+compiler, not arm-none-eabi-gcc) that runs at firmware-build time.  It does the
+full pipeline in one validated step:
+
+```
+┌───────────────────────────────────────────────────┐
+│ 1. Load .nam file (nlohmann/json)                  │
+│ 2. If SlimmableContainer, pull out A2-Lite (3-ch)  │
+│    sub-model; otherwise accept a bare WaveNet      │
+│ 3. Validate with the ENGINE'S OWN is_a2_shape() —  │
+│    same detector that runs on-device — so build    │
+│    acceptance can never drift from the runtime     │
+│ 4. Emit nam_model.c: weight array + metadata       │
+│    constants (channels, layers, receptive field,   │
+│    model name, architecture)                       │
+└───────────────────────────────────────────────────┘
+```
+
+The generated `nam_model.c` is a single C file containing:
+- `const float nam_model_weights[]` — the weight array (~1,871 floats)
+- `const unsigned nam_model_weights_len` — array length
+- `const char nam_model_name[]` — tone name from metadata
+- `const int nam_model_channels / layers / kernel_min / kernel_max`
+- `const int nam_model_receptive_field` — in samples (~132 ms)
+
+This file is compiled into the firmware.  **No filesystem, no SD card, no runtime
+parsing** — the model is a static const array in flash.
+
+### Swapping the model
+
+To use a different amp capture:
+
+```bash
+# Download any A2 capture from tone3000.com
+cp "My Sick 5150.nam" tone.nam
+
+# Edit CMakeLists.txt: change nam_set_model(example.nam) to nam_set_model(tone.nam)
+# Or pass it on the cmake command line:
+cmake -S . -B build -DNAM_MODEL=tone.nam -DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target pico_nam_pwm -j
+```
+
+`nam2c` validates the model at build time.  If you accidentally use an A2-Full
+or WaveNet v1 model, `is_a2_shape()` rejects it and the build fails with a clear
+message — no silent fallback to a wrong tone.
+
+### Output gain
+
+`NAM_OUTPUT_GAIN` in `src/nam_fx.cpp` scales the output level.  The output clamps,
+giving amp-like clipping when pushed.  Default is unity; adjust to match your
+pickup/ADC levels.
 
 ## Open questions
 
@@ -106,5 +183,6 @@ GP19 ←── PWM ←── timer ←── out_buf[48] ←─── NAM    │
 - **PWM resolution**: At 200 kHz carrier, PWM wrap=624 gives ~9.3 bits.
   Acceptable for guitar monitoring, but higher quality would need a codec.
 - **Latency**: 1 ms block + NAM pipeline (~1 ms) + PWM output buffering = ~2-3 ms.
-- **Model storage**: Today the model is compiled in. Flash has room for one model
-  (~7.5 KB weights + overhead). Runtime model loading is future work.
+- **Model storage**: Flash has room for one model (~7.5 KB weights + overhead).
+  Runtime model loading (USB mass-storage drag-and-drop) is planned upstream
+  but out of scope for our initial integration.
