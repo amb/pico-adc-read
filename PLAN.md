@@ -1,5 +1,10 @@
 # NAM-on-PWM — Plan
 
+> **Note**: This is the original design document. The as-built implementation
+> differs in some details (ISR-based I/O instead of DMA, no USB audio).
+> See [AGENTS.md](AGENTS.md) for the current architecture and
+> [README.md](README.md) for a quick overview.
+
 Replace the simple ADC→PWM passthrough with a **Neural Amp Modeler (NAM) A2-Lite**
 running on the Pico 2 (RP2350), based on
 [oyama/pico-neural-amp-modeler-demo](https://github.com/oyama/pico-neural-amp-modeler-demo).

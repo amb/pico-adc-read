@@ -1,3 +1,4 @@
 [submodule "lib/NeuralAmpModelerCore"]
 	path = lib/NeuralAmpModelerCore
 	url = https://github.com/oyama/NeuralAmpModelerCore.git
+	branch = add-rp2350-support
